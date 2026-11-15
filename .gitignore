@@ -1,0 +1,26 @@
+# Python bytecode, and other c extensions
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Unit test / coverage reports
+.pytest_cache/
+.vscode/
+.idea/
+
+# Large dataset & model files (Keep local or use Git LFS)
+data/*
+!data/.gitkeep
+models/*.h5
+models/*.pkl
+models/*.pth
+models/*.joblib
+
+# OS generated files
+.DS_Store
+Thumbs.db
