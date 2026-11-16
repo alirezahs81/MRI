@@ -50,3 +50,25 @@ def test_segmentation_does_not_generate_pseudo_tumor_masks():
     segmenter = TumorSegmenter()
     with pytest.raises(ModelNotAvailableError):
         segmenter.predict_mask(np.ones((8, 8), dtype=np.float32))
+
+
+
+def test_display_grid_uses_full_affine_orientation_and_origin():
+    from src.reconstruction import _display_grid
+
+    affine = np.array([
+        [0.0, -2.0, 0.0, 10.0],
+        [3.0, 0.0, 0.0, 20.0],
+        [0.0, 0.0, 4.0, 30.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ])
+    volume = MRIVolume(
+        data=np.zeros((8, 8, 8), dtype=np.float32),
+        spacing_mm=(4.0, 3.0, 2.0),
+        source="affine-test",
+        affine=affine,
+    )
+    _, world_x, world_y, world_z = _display_grid(volume, max_dimension=8)
+    assert world_x[3, 2, 1] == pytest.approx(6.0)
+    assert world_y[3, 2, 1] == pytest.approx(23.0)
+    assert world_z[3, 2, 1] == pytest.approx(42.0)

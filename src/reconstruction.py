@@ -17,9 +17,12 @@ def make_slice_figure(volume: MRIVolume, plane: str, index: int) -> go.Figure:
         "axis-1": (volume.data.shape[1], lambda i: volume.data[:, i, :]),
         "axis-2": (volume.data.shape[2], lambda i: volume.data[:, :, i]),
     }
-    if plane not in planes:
-        raise ValueError("Plane must be axial, coronal, or sagittal.")
-    count, extractor = planes[plane]
+    # Keep the earlier public plane names as aliases for downstream callers.
+    aliases = {"axial": "axis-0", "coronal": "axis-1", "sagittal": "axis-2"}
+    axis_name = aliases.get(plane, plane)
+    if axis_name not in planes:
+        raise ValueError("Plane must be axis-0, axis-1, axis-2, axial, coronal, or sagittal.")
+    count, extractor = planes[axis_name]
     if not 0 <= index < count:
         raise IndexError(f"Slice index must be between 0 and {count - 1}.")
     figure = go.Figure(go.Heatmap(z=extractor(index), colorscale="Gray", showscale=False))
