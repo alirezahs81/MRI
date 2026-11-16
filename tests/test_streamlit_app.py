@@ -35,7 +35,7 @@ def _make_dicom_zip_bytes(tmp_path):
         file_meta.MediaStorageSOPInstanceUID = generate_uid()
 
         dataset = FileDataset(
-            str(path), {}, file_meta=file_meta, preamble=b"\\x00" * 128
+            str(path), {}, file_meta=file_meta, preamble=bytes(128)
         )
         dataset.SOPClassUID = file_meta.MediaStorageSOPClassUID
         dataset.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
