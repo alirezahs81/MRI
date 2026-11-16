@@ -53,7 +53,7 @@ def load_nifti(path: str | Path) -> MRIVolume:
 
 
 def load_dicom_series(directory: str | Path) -> MRIVolume:
-    """Load one conventional single-frame DICOM image series from a directory."""
+    """Load one conventional single-frame DICOM series; reject mixed series instead of merging them."""
     root = Path(directory)
     if not root.is_dir():
         raise NotADirectoryError(f"DICOM input must be a directory: {root}")
@@ -63,14 +63,25 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         try:
             ds = pydicom.dcmread(str(file_path), force=False)
             if hasattr(ds, "PixelData") and hasattr(ds, "Rows") and hasattr(ds, "Columns"):
-                if int(getattr(ds, "NumberOfFrames", 1)) != 1:
-                    continue
-                datasets.append((file_path, ds))
+                if int(getattr(ds, "NumberOfFrames", 1)) == 1:
+                    datasets.append((file_path, ds))
         except Exception:
             continue
 
     if not datasets:
         raise ValueError(f"No readable single-frame DICOM images with pixel data were found in {root}.")
+
+    series_uids = {str(getattr(ds, "SeriesInstanceUID", "")) for _, ds in datasets}
+    series_uids.discard("")
+    if len(series_uids) > 1:
+        raise ValueError(
+            "This folder contains multiple DICOM series. Upload each sequence/series separately "
+            "so slices from different acquisitions are never mixed."
+        )
+    if series_uids:
+        selected_uid = next(iter(series_uids))
+        datasets = [(path, ds) for path, ds in datasets
+                    if str(getattr(ds, "SeriesInstanceUID", "")) == selected_uid]
 
     first = datasets[0][1]
     orientation = getattr(first, "ImageOrientationPatient", None)
@@ -127,7 +138,9 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
             "format": "DICOM",
             "slices_loaded": int(volume.shape[0]),
             "series_instance_uid": str(getattr(ds0, "SeriesInstanceUID", "")),
+            "series_description": str(getattr(ds0, "SeriesDescription", "")),
             "patient_id_present": bool(getattr(ds0, "PatientID", "")),
+            "image_orientation_patient": list(orientation) if orientation is not None else None,
         },
     )
 
