@@ -87,20 +87,37 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         raise ValueError(f"No readable single-frame DICOM images with pixel data were found in {root}.")
 
     series_uids = {str(getattr(ds, "SeriesInstanceUID", "")).strip() for _, ds in datasets}
-    if len(series_uids) > 1:
+    if len(series_uids) != 1 or "" in series_uids:
         raise ValueError(
-            "This folder contains multiple DICOM series or incomplete SeriesInstanceUID metadata. "
-            "Upload each series separately."
+            "Every DICOM image must contain the same non-empty SeriesInstanceUID. "
+            "Upload one complete DICOM series at a time."
         )
+
+    # Do not combine distinct acquisitions, echoes, or temporal positions into
+    # one 3D volume even when a sender reused a SeriesInstanceUID incorrectly.
+    consistency_tags = (
+        ("Modality", "Modality"),
+        ("FrameOfReferenceUID", "FrameOfReferenceUID"),
+        ("AcquisitionNumber", "AcquisitionNumber"),
+        ("TemporalPositionIdentifier", "TemporalPositionIdentifier"),
+        ("EchoNumbers", "EchoNumbers"),
+    )
+    for attribute, label in consistency_tags:
+        values = [str(getattr(ds, attribute, "")).strip() for _, ds in datasets]
+        present = [value for value in values if value]
+        if present and (len(present) != len(values) or len(set(present)) != 1):
+            raise ValueError(
+                f"DICOM slices have inconsistent or incomplete {label} metadata."
+            )
 
     first = datasets[0][1]
     expected_rows, expected_columns = int(first.Rows), int(first.Columns)
     if expected_rows < 1 or expected_columns < 1:
         raise ValueError("DICOM Rows and Columns must be positive.")
 
-    first_spacing = _dicom_vector(
-        getattr(first, "PixelSpacing", (1.0, 1.0)), "PixelSpacing", 2
-    )
+    if any(not hasattr(ds, "PixelSpacing") for _, ds in datasets):
+        raise ValueError("Every DICOM slice must provide PixelSpacing for physical geometry.")
+    first_spacing = _dicom_vector(first.PixelSpacing, "PixelSpacing", 2)
     if np.any(first_spacing <= 0):
         raise ValueError("DICOM PixelSpacing values must be positive.")
 
@@ -201,6 +218,10 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         affine[:3, 1] = row_direction * row_spacing
         affine[:3, 2] = normal * z_spacing
         affine[:3, 3] = origin
+        # DICOM patient coordinates are LPS; NIfTI world coordinates are RAS.
+        # Convert once here so geometry comparisons across formats are meaningful.
+        lps_to_ras = np.diag([-1.0, -1.0, 1.0, 1.0])
+        affine = lps_to_ras @ affine
 
     ds0 = datasets[0][1]
     return MRIVolume(

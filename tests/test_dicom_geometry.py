@@ -98,3 +98,55 @@ def test_dicom_series_rejects_non_uniform_slice_positions(tmp_path):
                      series_uid=uid, orientation=[1, 0, 0, 0, 1, 0])
     with pytest.raises(ValueError, match="non-uniform"):
         load_dicom_series(tmp_path)
+
+
+
+def test_dicom_series_rejects_missing_series_uid(tmp_path):
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+        series_uid="", orientation=[1, 0, 0, 0, 1, 0],
+    )
+    _write_slice(
+        tmp_path / "b.dcm", instance=2, z=1, pixels=np.zeros((3, 4)),
+        series_uid="", orientation=[1, 0, 0, 0, 1, 0],
+    )
+    with pytest.raises(ValueError, match="same non-empty SeriesInstanceUID"):
+        load_dicom_series(tmp_path)
+
+
+def test_dicom_series_affine_is_converted_from_lps_to_ras(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=10, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    _write_slice(
+        tmp_path / "b.dcm", instance=2, z=11, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    volume = load_dicom_series(tmp_path)
+    np.testing.assert_allclose(volume.affine[:3, 0], [-1.5, 0, 0])
+    np.testing.assert_allclose(volume.affine[:3, 1], [0, -1.0, 0])
+    np.testing.assert_allclose(volume.affine[:3, 2], [0, 0, 1.0])
+    np.testing.assert_allclose(volume.affine[:3, 3], [0, 0, 10.0])
+
+
+def test_dicom_series_rejects_mixed_temporal_positions(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    _write_slice(
+        tmp_path / "b.dcm", instance=2, z=1, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    # Add a distinct temporal position to one member: this must not be stacked.
+    ds = pydicom.dcmread(str(tmp_path / "b.dcm"))
+    ds.TemporalPositionIdentifier = 2
+    ds.save_as(tmp_path / "b.dcm", enforce_file_format=True)
+    ds = pydicom.dcmread(str(tmp_path / "a.dcm"))
+    ds.TemporalPositionIdentifier = 1
+    ds.save_as(tmp_path / "a.dcm", enforce_file_format=True)
+    with pytest.raises(ValueError, match="TemporalPositionIdentifier"):
+        load_dicom_series(tmp_path)

@@ -42,9 +42,16 @@ def extract_dicom_zip(archive_path: Path, destination: Path) -> None:
             raise ValueError(f"ZIP contains too many entries (limit: {MAX_ZIP_MEMBERS}).")
 
         total_size = 0
+        normalized_paths = []
+        seen_paths = set()
         for member in members:
             normalized_name = member.filename.replace("\\", "/")
             member_path = PurePosixPath(normalized_name)
+            canonical_name = member_path.as_posix()
+            if canonical_name in seen_paths:
+                raise ValueError("ZIP archive contains duplicate normalized paths.")
+            seen_paths.add(canonical_name)
+            normalized_paths.append(member_path)
             if (
                 member_path.is_absolute()
                 or not member_path.parts
@@ -65,8 +72,8 @@ def extract_dicom_zip(archive_path: Path, destination: Path) -> None:
             if member.compress_size and member.file_size / member.compress_size > MAX_ZIP_COMPRESSION_RATIO:
                 raise ValueError("ZIP compression ratio exceeds the safety limit.")
 
-        for member in members:
-            target = destination.joinpath(*PurePosixPath(member.filename.replace("\\", "/")).parts)
+        for member, member_path in zip(members, normalized_paths):
+            target = destination.joinpath(*member_path.parts)
             target_resolved = target.resolve()
             if target_resolved != destination_resolved and destination_resolved not in target_resolved.parents:
                 raise ValueError("ZIP archive contains an unsafe path.")

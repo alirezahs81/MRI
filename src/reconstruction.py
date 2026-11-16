@@ -28,16 +28,33 @@ def make_slice_figure(volume: MRIVolume, plane: str, index: int) -> go.Figure:
     return figure
 
 
-def _display_grid(volume: MRIVolume, max_dimension: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _display_grid(
+    volume: MRIVolume, max_dimension: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return a downsampled volume and coordinates in its declared world space."""
     if max_dimension < 8:
         raise ValueError("max_dimension must be at least 8.")
     data = volume.data
     strides = tuple(max(1, math.ceil(size / max_dimension)) for size in data.shape)
     display = data[::strides[0], ::strides[1], ::strides[2]]
-    z = np.arange(display.shape[0], dtype=np.float32) * volume.spacing_mm[0] * strides[0]
-    y = np.arange(display.shape[1], dtype=np.float32) * volume.spacing_mm[1] * strides[1]
-    x = np.arange(display.shape[2], dtype=np.float32) * volume.spacing_mm[2] * strides[2]
+    z = np.arange(display.shape[0], dtype=np.float64) * strides[0]
+    y = np.arange(display.shape[1], dtype=np.float64) * strides[1]
+    x = np.arange(display.shape[2], dtype=np.float64) * strides[2]
     zz, yy, xx = np.meshgrid(z, y, x, indexing="ij")
+
+    if volume.affine is not None:
+        voxel_xyz = np.stack(
+            [xx.ravel(), yy.ravel(), zz.ravel(), np.ones(xx.size)], axis=0
+        )
+        world_xyz = np.asarray(volume.affine, dtype=float) @ voxel_xyz
+        world_xyz = world_xyz[:3].reshape(3, *display.shape)
+        return display, world_xyz[0], world_xyz[1], world_xyz[2]
+
+    # If orientation is unavailable, retain only relative axis distances and
+    # avoid claiming that these are patient/world coordinates.
+    xx *= volume.spacing_mm[2]
+    yy *= volume.spacing_mm[1]
+    zz *= volume.spacing_mm[0]
     return display, xx, yy, zz
 
 
@@ -56,7 +73,12 @@ def make_volume_figure(volume: MRIVolume, max_dimension: int = 48) -> go.Figure:
     ))
     figure.update_layout(
         title="3D MRI intensity volume (not a tumor segmentation)",
-        scene=dict(xaxis_title="X (mm)", yaxis_title="Y (mm)", zaxis_title="Z (mm)", aspectmode="data"),
+        scene=dict(
+            xaxis_title="RAS X (mm)" if volume.affine is not None else "Relative X (mm; orientation unknown)",
+            yaxis_title="RAS Y (mm)" if volume.affine is not None else "Relative Y (mm; orientation unknown)",
+            zaxis_title="RAS Z (mm)" if volume.affine is not None else "Relative Z (mm; orientation unknown)",
+            aspectmode="data",
+        ),
         margin=dict(l=0, r=0, t=45, b=0),
     )
     return figure
@@ -79,7 +101,12 @@ def make_isosurface_figure(volume: MRIVolume, max_dimension: int = 64) -> go.Fig
     ))
     figure.update_layout(
         title="Exploratory MRI intensity isosurface (not anatomical segmentation)",
-        scene=dict(xaxis_title="X (mm)", yaxis_title="Y (mm)", zaxis_title="Z (mm)", aspectmode="data"),
+        scene=dict(
+            xaxis_title="RAS X (mm)" if volume.affine is not None else "Relative X (mm; orientation unknown)",
+            yaxis_title="RAS Y (mm)" if volume.affine is not None else "Relative Y (mm; orientation unknown)",
+            zaxis_title="RAS Z (mm)" if volume.affine is not None else "Relative Z (mm; orientation unknown)",
+            aspectmode="data",
+        ),
         margin=dict(l=0, r=0, t=45, b=0),
     )
     return figure
