@@ -1,5 +1,7 @@
 """Headless end-to-end tests for the Streamlit MRI upload interface."""
 
+from pathlib import Path
+
 import nibabel as nib
 import numpy as np
 from streamlit.testing.v1 import AppTest
@@ -16,7 +18,8 @@ def _make_nifti_bytes(tmp_path, name="sample_flair.nii.gz"):
 
 def test_streamlit_app_accepts_and_processes_nifti_upload(tmp_path):
     """Exercise the actual app entrypoint with a synthetic uploaded MRI volume."""
-    app = AppTest.from_file("app.py").run()
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    app = AppTest.from_file(app_path).run()
     assert not app.exception
     assert len(app.file_uploader) == 1
 
