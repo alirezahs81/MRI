@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import stat
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import streamlit as st
 
@@ -14,6 +15,10 @@ from src.volume_io import load_volume
 
 
 SEQUENCES = ("FLAIR", "T1", "T1ce", "T2", "Other")
+MAX_ZIP_MEMBERS = 10_000
+MAX_ZIP_MEMBER_BYTES = 256 * 1024 * 1024
+MAX_ZIP_TOTAL_BYTES = 1024 * 1024 * 1024
+MAX_ZIP_COMPRESSION_RATIO = 200
 
 
 def infer_sequence(filename: str) -> str:
@@ -27,14 +32,57 @@ def infer_sequence(filename: str) -> str:
 
 
 def extract_dicom_zip(archive_path: Path, destination: Path) -> None:
-    """Extract a ZIP only after checking every member stays inside destination."""
+    """Safely extract a bounded ZIP archive, rejecting traversal and symlink entries."""
+    destination.mkdir(parents=True, exist_ok=True)
     destination_resolved = destination.resolve()
+
     with zipfile.ZipFile(archive_path) as archive:
-        for member in archive.infolist():
-            target = (destination / member.filename).resolve()
-            if target != destination_resolved and destination_resolved not in target.parents:
+        members = archive.infolist()
+        if len(members) > MAX_ZIP_MEMBERS:
+            raise ValueError(f"ZIP contains too many entries (limit: {MAX_ZIP_MEMBERS}).")
+
+        total_size = 0
+        for member in members:
+            normalized_name = member.filename.replace("\\", "/")
+            member_path = PurePosixPath(normalized_name)
+            if (
+                member_path.is_absolute()
+                or not member_path.parts
+                or any(part in ("..", "") for part in member_path.parts)
+                or (member_path.parts and ":" in member_path.parts[0])
+            ):
                 raise ValueError("ZIP archive contains an unsafe path.")
-        archive.extractall(destination)
+            mode = member.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                raise ValueError("ZIP archive contains a symbolic link.")
+            if member.file_size < 0 or member.file_size > MAX_ZIP_MEMBER_BYTES:
+                raise ValueError("ZIP contains a file exceeding the per-file extraction limit.")
+            total_size += member.file_size
+            if total_size > MAX_ZIP_TOTAL_BYTES:
+                raise ValueError("ZIP exceeds the total uncompressed extraction limit.")
+            if member.file_size and member.compress_size == 0:
+                raise ValueError("ZIP contains an invalid compressed-size declaration.")
+            if member.compress_size and member.file_size / member.compress_size > MAX_ZIP_COMPRESSION_RATIO:
+                raise ValueError("ZIP compression ratio exceeds the safety limit.")
+
+        for member in members:
+            target = destination.joinpath(*PurePosixPath(member.filename.replace("\\", "/")).parts)
+            target_resolved = target.resolve()
+            if target_resolved != destination_resolved and destination_resolved not in target_resolved.parents:
+                raise ValueError("ZIP archive contains an unsafe path.")
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            written = 0
+            with archive.open(member) as source, target.open("wb") as output:
+                while chunk := source.read(1024 * 1024):
+                    written += len(chunk)
+                    if written > MAX_ZIP_MEMBER_BYTES:
+                        raise ValueError("ZIP member exceeded the extraction limit while being read.")
+                    output.write(chunk)
+            if written != member.file_size:
+                raise ValueError("ZIP member size did not match its declared size.")
 
 
 st.set_page_config(page_title="Brain MRI 3D Viewer", layout="wide")
@@ -76,7 +124,6 @@ if uploads:
                     archive_path = input_root / "series.zip"
                     archive_path.write_bytes(uploaded.getvalue())
                     dicom_root = input_root / "dicom"
-                    dicom_root.mkdir()
                     extract_dicom_zip(archive_path, dicom_root)
                     volume = load_volume(dicom_root)
                 else:
