@@ -161,7 +161,7 @@ if uploads:
                         "metadata. Synchronized slice comparison is enabled for this upload set."
                     )
                     axial_index = st.slider(
-                        "Synchronized axial slice",
+                        "Synchronized slice along array axis 0",
                         min_value=0,
                         max_value=reference_volume.data.shape[0] - 1,
                         value=(reference_volume.data.shape[0] - 1) // 2,
@@ -173,7 +173,7 @@ if uploads:
                             st.markdown(f"**{sequence}**")
                             st.caption(filename)
                             st.plotly_chart(
-                                make_slice_figure(volume, "axial", axial_index),
+                                make_slice_figure(volume, "axis-0", axial_index),
                                 use_container_width=True,
                                 key=f"aligned_axial_{index}",
                             )
@@ -206,7 +206,7 @@ if uploads:
                     st.markdown("**Orthogonal slices**")
                     columns = st.columns(3)
                     for column, plane, axis in zip(
-                        columns, ("axial", "coronal", "sagittal"), (0, 1, 2)
+                        columns, ("axis-0", "axis-1", "axis-2"), (0, 1, 2)
                     ):
                         with column:
                             maximum = volume.data.shape[axis] - 1

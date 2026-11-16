@@ -13,9 +13,10 @@ A research-oriented Python application for loading real brain MRI data and recon
 - Check multi-sequence array shape, spatial affine, orientation, and voxel spacing before synchronized slice comparison.
 - Enable synchronized axial slice comparison only when every uploaded volume passes strict geometry checks.
 - Warn and disable voxel-index comparison when geometry is mismatched or unavailable.
-- Inspect axial, coronal, and sagittal slices for each sequence independently.
+- Inspect the three orthogonal array-axis slice planes for each sequence. These are not automatically relabeled as anatomical planes for oblique DICOM acquisitions.
 - Explore physical-space 3D intensity volume rendering and exploratory intensity isosurfaces.
-- Preserve NIfTI orientation via canonical reorientation and voxel spacing metadata.
+- Preserve NIfTI orientation via canonical reorientation and voxel spacing metadata; convert DICOM patient coordinates from LPS to RAS for a shared world-coordinate convention.
+- Use the full spatial affine (orientation, origin, and voxel scale) for 3D display coordinates when geometry is available.
 
 ## Project layout
 
@@ -77,7 +78,7 @@ Tests use synthetic arrays and temporary NIfTI fixtures to validate software beh
 - Geometry compatibility is verified using shape, affine, orientation (encoded in affine), and voxel spacing. Missing affine metadata is treated as unverified.
 - Matching metadata is a necessary software check, not proof of clinical registration quality. The sample BraTS 2021 subject inspected during development had matching grids and affine metadata across FLAIR, T1, T1ce, and T2.
 - Multi-sequence registration, resampling, voxel-wise fusion, and overlays are not implemented. No registration or resampling is performed automatically.
-- DICOM support targets conventional single-frame series. Enhanced multi-frame DICOM, complex multi-series studies, and localizer filtering need further validation.
+- DICOM support targets conventional single-frame series with consistent non-empty SeriesInstanceUID, PixelSpacing, and supported acquisition metadata. Enhanced multi-frame DICOM, complex multi-series studies, and localizer filtering need further validation.
 - The isosurface is derived from intensity levels only. It is not a brain extraction mask, tissue segmentation, or tumor boundary.
 - 4D/time-series NIfTI is not supported.
 - Large volumes are downsampled for 3D display; source volumes remain unchanged for slice inspection.

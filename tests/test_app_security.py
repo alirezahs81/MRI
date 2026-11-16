@@ -40,3 +40,13 @@ def test_extract_dicom_zip_rejects_too_many_entries(tmp_path, monkeypatch):
     monkeypatch.setattr("app.MAX_ZIP_MEMBERS", 1)
     with pytest.raises(ValueError, match="too many entries"):
         extract_dicom_zip(archive_path, tmp_path / "out")
+
+
+
+def test_extract_dicom_zip_rejects_duplicate_normalized_paths(tmp_path):
+    archive_path = tmp_path / "duplicate.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("nested/slice.dcm", b"first")
+        archive.writestr("nested//slice.dcm", b"second")
+    with pytest.raises(ValueError, match="duplicate normalized paths"):
+        extract_dicom_zip(archive_path, tmp_path / "out")

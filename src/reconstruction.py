@@ -13,9 +13,9 @@ from src.volume_io import MRIVolume
 def make_slice_figure(volume: MRIVolume, plane: str, index: int) -> go.Figure:
     """Create an axial, coronal, or sagittal slice view."""
     planes = {
-        "axial": (volume.data.shape[0], lambda i: volume.data[i, :, :]),
-        "coronal": (volume.data.shape[1], lambda i: volume.data[:, i, :]),
-        "sagittal": (volume.data.shape[2], lambda i: volume.data[:, :, i]),
+        "axis-0": (volume.data.shape[0], lambda i: volume.data[i, :, :]),
+        "axis-1": (volume.data.shape[1], lambda i: volume.data[:, i, :]),
+        "axis-2": (volume.data.shape[2], lambda i: volume.data[:, :, i]),
     }
     if plane not in planes:
         raise ValueError("Plane must be axial, coronal, or sagittal.")
@@ -23,7 +23,10 @@ def make_slice_figure(volume: MRIVolume, plane: str, index: int) -> go.Figure:
     if not 0 <= index < count:
         raise IndexError(f"Slice index must be between 0 and {count - 1}.")
     figure = go.Figure(go.Heatmap(z=extractor(index), colorscale="Gray", showscale=False))
-    figure.update_layout(title=f"{plane.title()} slice {index + 1}/{count}", margin=dict(l=5, r=5, t=40, b=5))
+    figure.update_layout(
+        title=f"{plane.replace('-', ' ').title()} slice {index + 1}/{count}",
+        margin=dict(l=5, r=5, t=40, b=5),
+    )
     figure.update_yaxes(autorange="reversed", scaleanchor="x")
     return figure
 

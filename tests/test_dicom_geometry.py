@@ -150,3 +150,21 @@ def test_dicom_series_rejects_mixed_temporal_positions(tmp_path):
     ds.save_as(tmp_path / "a.dcm", enforce_file_format=True)
     with pytest.raises(ValueError, match="TemporalPositionIdentifier"):
         load_dicom_series(tmp_path)
+
+
+
+def test_dicom_series_rejects_missing_pixel_spacing(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    _write_slice(
+        tmp_path / "b.dcm", instance=2, z=1, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    ds = pydicom.dcmread(str(tmp_path / "b.dcm"))
+    del ds.PixelSpacing
+    ds.save_as(tmp_path / "b.dcm", enforce_file_format=True)
+    with pytest.raises(ValueError, match="PixelSpacing"):
+        load_dicom_series(tmp_path)
