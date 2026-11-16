@@ -1,82 +1,89 @@
-# 🧠 Brain Tumor MRI Detection & 3D Reconstruction
+# Brain MRI 3D Reconstruction
 
-An advanced end-to-end Python pipeline for medical image processing, brain tumor segmentation, and interactive 3D volumetric visualization from MRI scans.
+A research-oriented Python application for loading real brain MRI data and reconstructing a spatially-aware 3D volume from **DICOM series** or **NIfTI** files.
 
----
+> **Important:** this repository currently implements image loading, volume handling, slice viewing, and 3D intensity visualization. It does **not** provide a validated tumor detector or tumor segmentation model. Bright regions and intensity thresholds must never be interpreted as tumor diagnoses.
 
-## 🚀 Key Features
+## Current capabilities
 
-- **MRI Preprocessing:** Normalizes pixel intensity, applies robust noise reduction filters, and resizes volumetric scans.
-- **Tumor Segmentation:** Extracts precise tumor regions and generates binary segmentation masks.
-- **3D Surface Reconstruction:** Converts 2D segmentation slices into an interactive 3D volumetric model using Plotly.
-- **Modular Architecture:** Clean, well-tested, object-oriented Python codebase designed for extensibility and readability.
-- **Automated Testing:** Unit tests included to ensure robust pipeline execution.
+- Load a DICOM series from a folder (including nested folders) or a ZIP archive in the web app.
+- Load NIfTI `.nii` and `.nii.gz` volumes.
+- Preserve voxel spacing and NIfTI orientation information; sort DICOM slices using patient-space geometry when available.
+- Inspect axial, coronal, and sagittal slices.
+- Explore a downsampled 3D volume rendering without inventing segmentation masks.
+- Run automated tests and CI.
 
----
-
-## 🛠️ Project Structure
+## Project layout
 
 ```text
-Brain-Tumor-3D-Detection/
-│
-├── data/                  # MRI dataset storage or pointers
-├── models/                # Trained deep learning model weights
+MRI/
+├── app.py
+├── main.py
+├── requirements.txt
 ├── src/
-│   ├── __init__.py
-│   ├── preprocessing.py   # MRI intensity normalization and noise filtering
-│   ├── segmentation.py    # Tumor boundary extraction and segmentation
-│   ├── reconstruction.py  # 3D surface mesh generation and Plotly rendering
-│   └── main.py            # End-to-end pipeline runner
-│
-├── notebooks/             # Exploratory Jupyter Notebooks
-├── tests/                 # Unit tests (pytest)
-├── .gitignore             # Git ignore rules for cached & large files
-├── requirements.txt       # Python dependencies
-└── README.md              # Project documentation
+│   ├── volume_io.py
+│   ├── preprocessing.py
+│   ├── reconstruction.py
+│   ├── segmentation.py
+│   └── main.py
+├── tests/
+└── .github/workflows/ci.yml
 ```
 
----
+## Setup (Windows PowerShell)
 
-## 📦 Installation & Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-username/Brain-Tumor-3D-Detection.git
-   cd Brain-Tumor-3D-Detection
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-## 💻 Usage
-
-Run the complete pipeline (simulation, preprocessing, segmentation, and 3D reconstruction):
-
-```bash
-$env:PYTHONPATH="."
-python src/main.py
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Run unit tests:
-```bash
-python -m pytest tests/test_pipeline.py
+If PowerShell blocks activation, run the commands without activating the environment:
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
----
+## Run the web application
 
-## 🧪 Testing
-
-The project uses `pytest` for unit testing. To run tests:
-```bash
-python -m pytest
+```powershell
+streamlit run app.py
 ```
 
----
+Upload one NIfTI file (`.nii` / `.nii.gz`) or a ZIP containing a DICOM series. The app displays volume dimensions, voxel spacing, three orthogonal slice views, and an interactive 3D intensity rendering.
 
-## 📜 License
+## Run from the command line
 
-This project is open-source under the [MIT License](LICENSE).
+For a NIfTI file or a directory containing DICOM files:
+
+```powershell
+python main.py "D:\MRI\patient01"
+python main.py "D:\MRI\patient01.nii.gz" --output volume.html
+```
+
+The command-line tool prints the volume shape and spacing. If `--output` is supplied, it writes an interactive HTML volume view.
+
+## Tests
+
+```powershell
+python -m pytest -q
+```
+
+Tests use synthetic arrays and a temporary NIfTI fixture to validate software behavior only; they are not clinical validation.
+
+## Tumor detection status and next research stage
+
+Tumor detection/segmentation is deliberately unavailable until a suitable labeled dataset, segmentation masks, a documented training procedure, and patient-level evaluation are supplied. The current `src/segmentation.py` raises an explicit error rather than generating misleading percentile-based pseudo-masks.
+
+The previously mentioned unlabeled patient scans can support data-quality review and exploratory anomaly scoring, but cannot by themselves establish supervised tumor labels or diagnostic accuracy. Any future model must be evaluated on patient-separated data and clearly labeled as research software, not a medical device.
+
+## Supported inputs and limitations
+
+- DICOM: conventional single-frame image series with pixel data. Enhanced multi-frame DICOM, localizer filtering, and complex multi-series studies need additional validation.
+- NIfTI: 3D scalar volumes. 4D/time-series and multi-modal registration are not yet implemented.
+- Large volumes are downsampled for interactive 3D display; the source volume remains unchanged for slice inspection.
+- De-identify medical data before sharing or uploading it.
+
+## Disclaimer
+
+This software is for research and educational use only. It is not intended for diagnosis, treatment decisions, or clinical use.
