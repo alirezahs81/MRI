@@ -10,10 +10,12 @@ A research-oriented Python application for loading real brain MRI data and recon
 - Load one conventional single-frame DICOM series from a directory or ZIP archive.
 - Reject mixed DICOM series rather than accidentally stacking unrelated acquisitions.
 - Upload multiple sequences and label them as FLAIR, T1, T1ce, T2, or Other.
+- Check multi-sequence array shape, spatial affine, orientation, and voxel spacing before synchronized slice comparison.
+- Enable synchronized axial slice comparison only when every uploaded volume passes strict geometry checks.
+- Warn and disable voxel-index comparison when geometry is mismatched or unavailable.
 - Inspect axial, coronal, and sagittal slices for each sequence independently.
 - Explore physical-space 3D intensity volume rendering and exploratory intensity isosurfaces.
 - Preserve NIfTI orientation via canonical reorientation and voxel spacing metadata.
-- Keep each sequence separate until image registration and geometry compatibility are implemented and validated.
 
 ## Project layout
 
@@ -24,6 +26,7 @@ MRI/
 ├── requirements.txt
 ├── src/
 │   ├── volume_io.py
+│   ├── multimodal.py
 │   ├── preprocessing.py
 │   ├── reconstruction.py
 │   ├── segmentation.py
@@ -71,10 +74,12 @@ Tests use synthetic arrays and temporary NIfTI fixtures to validate software beh
 
 ## Important limitations and next research stage
 
-- Multi-sequence uploads are currently displayed independently. Registration, voxel-to-voxel fusion, and overlays are not implemented.
+- Geometry compatibility is verified using shape, affine, orientation (encoded in affine), and voxel spacing. Missing affine metadata is treated as unverified.
+- Matching metadata is a necessary software check, not proof of clinical registration quality. The sample BraTS 2021 subject inspected during development had matching grids and affine metadata across FLAIR, T1, T1ce, and T2.
+- Multi-sequence registration, resampling, voxel-wise fusion, and overlays are not implemented. No registration or resampling is performed automatically.
 - DICOM support targets conventional single-frame series. Enhanced multi-frame DICOM, complex multi-series studies, and localizer filtering need further validation.
 - The isosurface is derived from intensity levels only. It is not a brain extraction mask, tissue segmentation, or tumor boundary.
-- 4D/time-series NIfTI and automated orientation harmonization across modalities are not yet implemented.
+- 4D/time-series NIfTI is not supported.
 - Large volumes are downsampled for 3D display; source volumes remain unchanged for slice inspection.
 - Tumor segmentation is disabled until labeled images, expert masks, trained weights, and patient-separated evaluation are available. Unlabeled scans can support exploratory quality review or anomaly scoring, not supervised tumor diagnosis.
 

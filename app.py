@@ -8,6 +8,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from src.multimodal import check_geometry_compatibility
 from src.reconstruction import make_isosurface_figure, make_slice_figure, make_volume_figure
 from src.volume_io import load_volume
 
@@ -87,9 +88,55 @@ if uploads:
         if loaded:
             st.success(f"Loaded {len(loaded)} MRI sequence(s).")
             st.caption(
-                "Each sequence is inspected independently. Cross-sequence fusion/overlay is intentionally disabled "
-                "until image registration and geometry compatibility are validated."
+                "Geometry is checked before synchronized multi-sequence viewing. "
+                "No registration or resampling is performed automatically."
             )
+
+            if len(loaded) > 1:
+                reference_sequence, reference_name, reference_volume = loaded[0]
+                compatibility = []
+                for sequence, filename, volume in loaded[1:]:
+                    is_compatible, reason = check_geometry_compatibility(
+                        reference_volume, volume
+                    )
+                    compatibility.append((sequence, filename, is_compatible, reason))
+
+                if all(item[2] for item in compatibility):
+                    st.success(
+                        "All uploaded volumes have matching voxel grids and spatial affine "
+                        "metadata. Synchronized slice comparison is enabled for this upload set."
+                    )
+                    axial_index = st.slider(
+                        "Synchronized axial slice",
+                        min_value=0,
+                        max_value=reference_volume.data.shape[0] - 1,
+                        value=(reference_volume.data.shape[0] - 1) // 2,
+                        key="shared_axial_index",
+                    )
+                    comparison_columns = st.columns(min(len(loaded), 4))
+                    for index, (sequence, filename, volume) in enumerate(loaded):
+                        with comparison_columns[index % len(comparison_columns)]:
+                            st.markdown(f"**{sequence}**")
+                            st.caption(filename)
+                            st.plotly_chart(
+                                make_slice_figure(volume, "axial", axial_index),
+                                use_container_width=True,
+                                key=f"aligned_axial_{index}",
+                            )
+                else:
+                    st.warning(
+                        "Synchronized voxel-wise comparison is disabled because geometry "
+                        "could not be verified for every uploaded sequence. Do not compare "
+                        "the same voxel index across these images."
+                    )
+                    for sequence, filename, is_compatible, reason in compatibility:
+                        status = "compatible with reference" if is_compatible else "not verified"
+                        st.write(f"- {sequence} ({filename}): {status} — {reason}")
+                    st.info(
+                        "Use a validated registration/resampling workflow before overlays or "
+                        "voxel-wise fusion. This viewer does not register images."
+                    )
+
             for number, (sequence, filename, volume) in enumerate(loaded):
                 with st.container(border=True):
                     st.subheader(f"{sequence} — {filename}")
