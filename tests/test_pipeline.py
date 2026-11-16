@@ -38,11 +38,12 @@ def test_volume_figure_is_created_without_fake_masks():
     assert figure.data[0].type == "volume"
 
 
-def test_isosurface_figure_uses_physical_coordinates():
+def test_isosurface_figure_uses_physical_coordinates_after_downsampling():
     figure = make_isosurface_figure(sample_volume(), max_dimension=16)
     assert len(figure.data) == 1
     assert figure.data[0].type == "isosurface"
-    assert float(np.max(figure.data[0].x)) == pytest.approx(19.0)
+    # The 20-voxel x-axis is sampled at stride 2 (0, 2, ..., 18 mm).
+    assert float(np.max(figure.data[0].x)) == pytest.approx(18.0)
 
 
 def test_segmentation_does_not_generate_pseudo_tumor_masks():
