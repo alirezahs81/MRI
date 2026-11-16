@@ -1,38 +1,29 @@
-"""
-Main Pipeline Runner for MRI Brain Tumor Detection & 3D Reconstruction.
-"""
+"""Command-line entry point for real MRI volume inspection."""
 
-import numpy as np
-from src.preprocessing import MRIPreprocessor
-from src.segmentation import TumorSegmenter
-from src.reconstruction import TumorReconstructor3D
+from __future__ import annotations
+
+import argparse
+
+from src.reconstruction import make_volume_figure
+from src.volume_io import load_volume
 
 
-def run_pipeline():
-    print("=== Starting Brain Tumor MRI & 3D Pipeline ===")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Load and inspect a DICOM series or NIfTI MRI volume.")
+    parser.add_argument("input", help="Path to a DICOM directory, .nii file, or .nii.gz file")
+    parser.add_argument("--output", help="Optional path for an interactive HTML volume view")
+    args = parser.parse_args()
 
-    # 1. Simulate a 3D MRI volume stack (Depth=10 slices, 256x256 resolution)
-    print("[1/3] Generating/Loading sample MRI volume...")
-    mock_volume = np.random.rand(10, 256, 256)
-
-    # 2. Preprocess slices
-    print("[2/3] Preprocessing MRI slices...")
-    preprocessor = MRIPreprocessor(target_size=(256, 256))
-    processed_slices = [preprocessor.process(slice_) for slice_ in mock_volume]
-
-    # 3. Tumor Segmentation
-    print("[3/3] Performing Tumor Segmentation & 3D Reconstruction...")
-    segmenter = TumorSegmenter()
-    masks = [segmenter.predict_mask(s) for s in processed_slices]
-    mask_stack = np.array(masks)
-
-    # 4. 3D Reconstruction
-    reconstructor = TumorReconstructor3D()
-    fig = reconstructor.render_plotly_3d(mask_stack)
-
-    print("Pipeline executed successfully! 3D Model generated.")
-    return fig
+    volume = load_volume(args.input)
+    print(f"Loaded: {volume.source}")
+    print(f"Format: {volume.metadata.get('format', 'unknown')}")
+    print(f"Shape (z, y, x): {volume.data.shape}")
+    print(f"Spacing (z, y, x) mm: {volume.spacing_mm}")
+    print("This is an MRI intensity volume, not a tumor prediction.")
+    if args.output:
+        make_volume_figure(volume).write_html(args.output, include_plotlyjs="cdn")
+        print(f"Interactive 3D view saved to: {args.output}")
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    main()

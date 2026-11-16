@@ -1,37 +1,24 @@
-"""
-Tumor Segmentation and Prediction Module.
-Simulates or loads deep learning inference for tumor boundary extraction.
-"""
+"""Explicit guard for the not-yet-implemented, unvalidated tumor model."""
 
-import numpy as np
+
+class ModelNotAvailableError(RuntimeError):
+    """Raised when a validated tumor segmentation model has not been configured."""
 
 
 class TumorSegmenter:
-    """Performs tumor segmentation on preprocessed MRI slices."""
+    """Placeholder API that refuses to fabricate tumor masks from image intensity."""
 
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: str | None = None) -> None:
         self.model_path = model_path
-        self.is_loaded = model_path is not None
+        self.is_loaded = False
 
     def load_model(self) -> None:
-        """Load trained segmentation model weights."""
-        # Placeholder for actual model loading (e.g., TensorFlow/PyTorch)
-        print(f"Loading model weights from {self.model_path}...")
-        self.is_loaded = True
+        raise ModelNotAvailableError(
+            "No validated tumor segmentation model is included. Supply labeled training data, "
+            "trained weights, and independent patient-level evaluation before enabling inference."
+        )
 
-    def predict_mask(self, image_slice: np.ndarray) -> np.ndarray:
-        """
-        Generate binary tumor mask for a given image slice.
-        Returns a mask of the same dimensions with 1 for tumor regions and 0 otherwise.
-        """
-        # Simulated segmentation mask (thresholding-based mock or placeholder)
-        # In a real pipeline, model.predict(image_slice) is called here.
-        if len(image_slice.shape) == 3:
-            gray = np.mean(image_slice, axis=2)
-        else:
-            gray = image_slice
-
-        # Simple mock thresholding to simulate tumor region detection
-        thresh = np.percentile(gray, 90)
-        mask = (gray >= thresh).astype(np.uint8)
-        return mask
+    def predict_mask(self, image_slice):
+        raise ModelNotAvailableError(
+            "Tumor segmentation is unavailable. Intensity thresholding is not a valid tumor detector."
+        )
