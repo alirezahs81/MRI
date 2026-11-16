@@ -19,6 +19,24 @@ MAX_ZIP_MEMBERS = 10_000
 MAX_ZIP_MEMBER_BYTES = 256 * 1024 * 1024
 MAX_ZIP_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_ZIP_COMPRESSION_RATIO = 200
+MAX_UPLOADS = 5
+MAX_UPLOAD_FILE_BYTES = 256 * 1024 * 1024
+MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024
+
+
+def validate_upload_limits(uploads) -> None:
+    """Reject excessive upload counts and sizes before writing files to disk."""
+    if len(uploads) > MAX_UPLOADS:
+        raise ValueError(f"Too many uploads; the limit is {MAX_UPLOADS}.")
+    sizes = [int(upload.size) for upload in uploads]
+    if any(size < 0 or size > MAX_UPLOAD_FILE_BYTES for size in sizes):
+        raise ValueError(
+            f"Each upload must be no larger than {MAX_UPLOAD_FILE_BYTES // (1024 * 1024)} MiB."
+        )
+    if sum(sizes) > MAX_TOTAL_UPLOAD_BYTES:
+        raise ValueError(
+            f"Combined uploads exceed the {MAX_TOTAL_UPLOAD_BYTES // (1024 * 1024)} MiB total limit."
+        )
 
 
 def infer_sequence(filename: str) -> str:
@@ -104,6 +122,13 @@ st.write(
 uploads = st.file_uploader(
     "MRI sequence files", type=["nii", "gz", "zip"], accept_multiple_files=True
 )
+
+if uploads:
+    try:
+        validate_upload_limits(uploads)
+    except (AttributeError, TypeError, ValueError) as exc:
+        st.error(f"Upload rejected: {exc}")
+        uploads = []
 
 if uploads:
     with tempfile.TemporaryDirectory() as temp_dir:

@@ -197,3 +197,38 @@ def test_dicom_series_does_not_silently_skip_corrupt_dcm_file(tmp_path):
     (tmp_path / "broken.dcm").write_bytes(b"not a dicom file")
     with pytest.raises(ValueError, match="Could not read DICOM file"):
         load_dicom_series(tmp_path)
+
+
+
+def test_dicom_series_rejects_non_mr_modality(tmp_path):
+    uid = generate_uid()
+    _write_slice(tmp_path / "a.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+                 series_uid=uid, orientation=[1, 0, 0, 0, 1, 0])
+    ds = pydicom.dcmread(str(tmp_path / "a.dcm"))
+    ds.Modality = "CT"
+    ds.save_as(tmp_path / "a.dcm", enforce_file_format=True)
+    with pytest.raises(ValueError, match="Only DICOM MR modality"):
+        load_dicom_series(tmp_path)
+
+
+def test_dicom_series_rejects_inconsistent_pixel_representation(tmp_path):
+    uid = generate_uid()
+    for index in range(2):
+        _write_slice(tmp_path / f"{index}.dcm", instance=index, z=index,
+                     pixels=np.zeros((3, 4)), series_uid=uid,
+                     orientation=[1, 0, 0, 0, 1, 0])
+    ds = pydicom.dcmread(str(tmp_path / "1.dcm"))
+    ds.PixelRepresentation = 0
+    ds.PixelData = np.zeros((3, 4), dtype="<u2").tobytes()
+    ds.save_as(tmp_path / "1.dcm", enforce_file_format=True)
+    with pytest.raises(ValueError, match="inconsistent pixel representation"):
+        load_dicom_series(tmp_path)
+
+
+def test_dicom_series_rejects_excessive_voxel_count_before_decoding(tmp_path, monkeypatch):
+    uid = generate_uid()
+    _write_slice(tmp_path / "a.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+                 series_uid=uid, orientation=[1, 0, 0, 0, 1, 0])
+    monkeypatch.setattr("src.volume_io.MAX_VOLUME_VOXELS", 10)
+    with pytest.raises(ValueError, match="safety limit"):
+        load_dicom_series(tmp_path)

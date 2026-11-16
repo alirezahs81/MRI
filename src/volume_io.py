@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import prod
 from pathlib import Path
 from typing import Any
 
 import nibabel as nib
 import numpy as np
 import pydicom
+
+
+MAX_VOLUME_VOXELS = 32_000_000
+MAX_DICOM_SLICES = 10_000
 
 
 @dataclass
@@ -44,10 +49,17 @@ def load_nifti(path: str | Path) -> MRIVolume:
     image_path = Path(path)
     if not image_path.is_file():
         raise FileNotFoundError(f"NIfTI file not found: {image_path}")
-    image = nib.as_closest_canonical(nib.load(str(image_path)))
+    image = nib.load(str(image_path))
+    if len(image.shape) != 3:
+        raise ValueError(f"Expected a 3D NIfTI volume, received {len(image.shape)} dimensions.")
+    voxel_count = prod(int(size) for size in image.shape)
+    if voxel_count > MAX_VOLUME_VOXELS:
+        raise ValueError(
+            f"NIfTI volume contains {voxel_count:,} voxels; the safety limit is "
+            f"{MAX_VOLUME_VOXELS:,}."
+        )
+    image = nib.as_closest_canonical(image)
     data_xyz = np.asarray(image.get_fdata(dtype=np.float32))
-    if data_xyz.ndim != 3:
-        raise ValueError(f"Expected a 3D NIfTI volume, received {data_xyz.ndim} dimensions.")
     zooms = image.header.get_zooms()[:3]
     data_zyx = np.transpose(data_xyz, (2, 1, 0))
     return MRIVolume(
@@ -95,6 +107,14 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
 
     if not datasets:
         raise ValueError(f"No readable single-frame DICOM images with pixel data were found in {root}.")
+    if len(datasets) > MAX_DICOM_SLICES:
+        raise ValueError(
+            f"DICOM series contains too many slices ({len(datasets):,}); "
+            f"the safety limit is {MAX_DICOM_SLICES:,}."
+        )
+    modalities = {str(getattr(ds, "Modality", "")).strip().upper() for _, ds in datasets}
+    if modalities != {"MR"}:
+        raise ValueError("Only DICOM MR modality images are supported.")
 
     series_uids = {str(getattr(ds, "SeriesInstanceUID", "")).strip() for _, ds in datasets}
     if len(series_uids) != 1 or "" in series_uids:
@@ -124,6 +144,37 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
     expected_rows, expected_columns = int(first.Rows), int(first.Columns)
     if expected_rows < 1 or expected_columns < 1:
         raise ValueError("DICOM Rows and Columns must be positive.")
+    voxel_count = len(datasets) * expected_rows * expected_columns
+    if voxel_count > MAX_VOLUME_VOXELS:
+        raise ValueError(
+            f"DICOM series contains {voxel_count:,} voxels; the safety limit is "
+            f"{MAX_VOLUME_VOXELS:,}."
+        )
+    pixel_attributes = (
+        "SamplesPerPixel", "PhotometricInterpretation", "BitsAllocated",
+        "BitsStored", "HighBit", "PixelRepresentation",
+    )
+    reference_pixel_spec = tuple(getattr(first, name, None) for name in pixel_attributes)
+    if any(value is None for value in reference_pixel_spec):
+        raise ValueError("DICOM pixel representation metadata is incomplete.")
+    if reference_pixel_spec[0] != 1 or reference_pixel_spec[1] not in {"MONOCHROME1", "MONOCHROME2"}:
+        raise ValueError("Only single-channel monochrome DICOM pixel data is supported.")
+    bits_allocated, bits_stored, high_bit, pixel_representation = (
+        reference_pixel_spec[2], reference_pixel_spec[3],
+        reference_pixel_spec[4], reference_pixel_spec[5],
+    )
+    if (
+        bits_allocated not in {8, 16, 32}
+        or not isinstance(bits_stored, int)
+        or not 1 <= bits_stored <= bits_allocated
+        or high_bit != bits_stored - 1
+        or pixel_representation not in {0, 1}
+    ):
+        raise ValueError("DICOM pixel bit-depth or representation metadata is unsupported.")
+    for _, ds in datasets:
+        pixel_spec = tuple(getattr(ds, name, None) for name in pixel_attributes)
+        if pixel_spec != reference_pixel_spec:
+            raise ValueError("DICOM slices have inconsistent pixel representation metadata.")
 
     if any(not hasattr(ds, "PixelSpacing") for _, ds in datasets):
         raise ValueError("Every DICOM slice must provide PixelSpacing for physical geometry.")

@@ -50,3 +50,39 @@ def test_extract_dicom_zip_rejects_duplicate_normalized_paths(tmp_path):
         archive.writestr("nested//slice.dcm", b"second")
     with pytest.raises(ValueError, match="duplicate normalized paths"):
         extract_dicom_zip(archive_path, tmp_path / "out")
+
+
+
+def test_upload_limits_accept_safe_uploads():
+    from types import SimpleNamespace
+    from app import validate_upload_limits
+
+    validate_upload_limits([SimpleNamespace(size=1024), SimpleNamespace(size=2048)])
+
+
+def test_upload_limits_rejects_oversized_single_file(monkeypatch):
+    from types import SimpleNamespace
+    from app import validate_upload_limits
+
+    monkeypatch.setattr("app.MAX_UPLOAD_FILE_BYTES", 100)
+    with pytest.raises(ValueError, match="Each upload"):
+        validate_upload_limits([SimpleNamespace(size=101)])
+
+
+def test_upload_limits_rejects_excessive_combined_size(monkeypatch):
+    from types import SimpleNamespace
+    from app import validate_upload_limits
+
+    monkeypatch.setattr("app.MAX_UPLOAD_FILE_BYTES", 100)
+    monkeypatch.setattr("app.MAX_TOTAL_UPLOAD_BYTES", 150)
+    with pytest.raises(ValueError, match="Combined uploads"):
+        validate_upload_limits([SimpleNamespace(size=80), SimpleNamespace(size=80)])
+
+
+def test_upload_limits_rejects_too_many_files(monkeypatch):
+    from types import SimpleNamespace
+    from app import validate_upload_limits
+
+    monkeypatch.setattr("app.MAX_UPLOADS", 1)
+    with pytest.raises(ValueError, match="Too many uploads"):
+        validate_upload_limits([SimpleNamespace(size=1), SimpleNamespace(size=1)])

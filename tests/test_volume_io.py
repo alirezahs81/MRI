@@ -33,3 +33,17 @@ def test_unsupported_file_fails_clearly(tmp_path):
     path.write_bytes(b"not an MRI")
     with pytest.raises(ValueError, match="Unsupported input"):
         load_volume(path)
+
+
+
+def test_load_nifti_rejects_excessive_voxel_count_before_loading_data(tmp_path, monkeypatch):
+    path = tmp_path / "oversized.nii"
+    path.write_bytes(b"placeholder")
+
+    class HeaderOnlyImage:
+        shape = (100, 100, 100)
+
+    monkeypatch.setattr("src.volume_io.MAX_VOLUME_VOXELS", 10_000)
+    monkeypatch.setattr("src.volume_io.nib.load", lambda _: HeaderOnlyImage())
+    with pytest.raises(ValueError, match="safety limit"):
+        load_nifti(path)
