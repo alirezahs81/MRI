@@ -1,22 +1,21 @@
 # Brain MRI 3D Reconstruction
 
-A research-oriented Python application for loading real brain MRI data and reconstructing spatially-aware 3D views from **DICOM series** or **NIfTI** files.
+A research-oriented Python application for loading 3D brain MRI volumes from **NIfTI** files or conventional **single-frame DICOM series**, checking spatial metadata, and exploring 2D/3D intensity views.
 
-> **Important:** this project visualizes MRI intensities. It does not include a validated tumor detector or tumor segmentation model. Intensity thresholds and isosurfaces must never be interpreted as tumor diagnoses or anatomical masks.
+> **Important:** this project is an image viewer/reconstruction prototype. It does not contain a validated tumor detector or tumor segmentation model. Intensity thresholds and isosurfaces are not diagnoses, anatomical masks, or tumor boundaries.
 
 ## Capabilities
 
-- Load 3D NIfTI volumes (`.nii`, `.nii.gz`).
-- Load one conventional single-frame DICOM series from a directory or ZIP archive.
-- Reject mixed DICOM series rather than accidentally stacking unrelated acquisitions.
-- Upload multiple sequences and label them as FLAIR, T1, T1ce, T2, or Other.
-- Check multi-sequence array shape, spatial affine, orientation, and voxel spacing before synchronized slice comparison.
-- Enable synchronized axial slice comparison only when every uploaded volume passes strict geometry checks.
-- Warn and disable voxel-index comparison when geometry is mismatched or unavailable.
-- Inspect the three orthogonal array-axis slice planes for each sequence. These are not automatically relabeled as anatomical planes for oblique DICOM acquisitions.
-- Explore physical-space 3D intensity volume rendering and exploratory intensity isosurfaces.
-- Preserve NIfTI orientation via canonical reorientation and voxel spacing metadata; convert DICOM patient coordinates from LPS to RAS for a shared world-coordinate convention.
-- Use the full spatial affine (orientation, origin, and voxel scale) for 3D display coordinates when geometry is available.
+- Load 3D NIfTI volumes (`.nii`, `.nii.gz`) and conventional single-frame DICOM series.
+- Load a DICOM series from a directory in the Python API/CLI, or from a ZIP archive in the Streamlit app.
+- Reject mixed DICOM SeriesInstanceUIDs and several inconsistent or unsupported series configurations.
+- Check multi-sequence array shape, spatial affine, orientation, and voxel spacing before enabling synchronized voxel-index slice comparison.
+- Disable synchronized comparison when geometry is missing or does not match; the application does not silently register or resample images.
+- Inspect three orthogonal **array-axis** slice views. For oblique acquisitions, these views are not automatically anatomical axial/coronal/sagittal planes.
+- Explore 3D intensity volume rendering and intensity-derived isosurfaces.
+- Preserve NIfTI affine metadata after canonical reorientation and convert DICOM patient coordinates from LPS to RAS when complete spatial geometry is available.
+- Use the full affine for physical-space 3D display coordinates when available; otherwise display relative axes without claiming patient-space orientation.
+- Apply bounded ZIP extraction checks for path traversal, symlinks, duplicate normalized paths, excessive entry counts, and oversized/high-ratio archives.
 
 ## Project layout
 
@@ -38,6 +37,8 @@ MRI/
 
 ## Setup (Windows PowerShell)
 
+The CI workflow currently uses Python 3.11.
+
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -45,7 +46,8 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-If PowerShell blocks activation, use the environment's Python directly:
+If PowerShell blocks environment activation, call the environment's Python directly:
+
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
@@ -56,7 +58,7 @@ If PowerShell blocks activation, use the environment's Python directly:
 streamlit run app.py
 ```
 
-Upload one or more NIfTI volumes or ZIP files, with each ZIP containing one DICOM series. Assign the correct sequence label to each upload. Filename hints are only suggestions and can be overridden.
+Upload one or more NIfTI files or ZIP archives, with each ZIP containing one DICOM series. Assign the correct sequence label to each upload. Filename-based sequence hints are suggestions only and can be overridden in the interface.
 
 ## Run from the command line
 
@@ -65,24 +67,33 @@ python main.py "D:\MRI\patient01"
 python main.py "D:\MRI\patient01.nii.gz" --output volume.html
 ```
 
-## Tests
+## Run tests
 
 ```powershell
 python -m pytest -q
 ```
 
-Tests include generated synthetic single-frame DICOM series, temporary NIfTI files, ZIP extraction/security cases, and headless Streamlit upload tests for both NIfTI and DICOM ZIP inputs. The DICOM fixtures are created by the test suite; they are **not real patient scans**. No end-to-end validation against the 4 GB clinical dataset or another real-world DICOM study has been performed. Passing these tests verifies software behavior on controlled fixtures only; it is not clinical validation and does not establish reconstruction accuracy on clinical scans.
+The automated suite uses generated synthetic DICOM fixtures and temporary synthetic NIfTI files. It also exercises ZIP safety checks and headless Streamlit upload paths for NIfTI and DICOM ZIP inputs. These tests verify selected software behaviors on controlled fixtures; they are **not tests on real patient scans**.
 
-## Validation status\n\n- **Automated synthetic-fixture tests:** cover NIfTI loading/rendering, conventional single-frame DICOM ordering and geometry, LPS-to-RAS affine conversion, rejection of several inconsistent/unsupported DICOM cases, ZIP safety, and Streamlit upload flows.\n- **Real-world DICOM validation:** not performed in this repository workflow. A real clinical series has not been processed end to end for this release; this remains optional follow-up validation, not a prerequisite for running the synthetic CI suite.\n- **Clinical validation:** not performed. The application is a research/educational viewer and must not be used for diagnosis or treatment decisions.\n\n## Important limitations and next research stage
+See [the validation report](reports/validation_report.md) for the tested areas, CI run references, known gaps, and the scope of any future real-data validation.
 
-- Geometry compatibility is verified using shape, affine, orientation (encoded in affine), and voxel spacing. Missing affine metadata is treated as unverified.
-- Matching metadata is a necessary software check, not proof of clinical registration quality. The sample BraTS 2021 subject inspected during development had matching grids and affine metadata across FLAIR, T1, T1ce, and T2.
-- Multi-sequence registration, resampling, voxel-wise fusion, and overlays are not implemented. No registration or resampling is performed automatically.
-- DICOM support targets conventional single-frame series with consistent non-empty SeriesInstanceUID, PixelSpacing, and supported acquisition metadata. Enhanced multi-frame DICOM, complex multi-series studies, and localizer filtering need further validation.
+## Validation status
+
+- **Automated synthetic-fixture tests:** run in GitHub Actions and cover selected NIfTI, DICOM geometry/ordering, multi-sequence geometry checks, rendering, ZIP security, and Streamlit upload behavior.
+- **Real-world DICOM validation:** not performed for this release. No real clinical DICOM series has been processed end to end as part of this repository workflow.
+- **Clinical validation:** not performed. Passing CI does not establish clinical accuracy, diagnostic performance, or suitability for patient care.
+
+## Important limitations
+
+- Geometry compatibility is a metadata/grid check, not proof of clinical registration quality or anatomical correspondence.
+- Multi-sequence registration, resampling, voxel-wise fusion, and overlays are not implemented.
+- DICOM support targets conventional single-frame series. Enhanced multi-frame DICOM, complex multi-series studies, localizer filtering, and broader vendor-specific edge cases need additional validation.
+- DICOM files without complete orientation/position metadata may be loaded without a patient-space affine; such volumes cannot pass the strict multi-sequence geometry compatibility check.
+- DICOM parsing currently skips files that fail parsing when they do not use a `.dcm` or `.dicom` extension. Use a clean series directory containing the intended image instances.
 - The isosurface is derived from intensity levels only. It is not a brain extraction mask, tissue segmentation, or tumor boundary.
 - 4D/time-series NIfTI is not supported.
-- Large volumes are downsampled for 3D display; source volumes remain unchanged for slice inspection.
-- Tumor segmentation is disabled until labeled images, expert masks, trained weights, and patient-separated evaluation are available. Unlabeled scans can support exploratory quality review or anomaly scoring, not supervised tumor diagnosis.
+- Large volumes are downsampled for 3D display; source arrays are retained for slice inspection.
+- Tumor segmentation is intentionally unavailable until suitable labeled data, expert reference masks, trained model weights, and patient-separated evaluation are provided.
 
 ## Disclaimer
 
