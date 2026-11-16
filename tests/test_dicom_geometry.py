@@ -52,8 +52,8 @@ def test_dicom_series_is_sorted_and_has_patient_space_affine(tmp_path):
     assert volume.data.shape == (3, 3, 4)
     np.testing.assert_allclose(volume.data[:, 0, 0], [-10.0, -8.0, -6.0])
     assert volume.spacing_mm == pytest.approx((1.0, 1.0, 1.5))
-    np.testing.assert_allclose(volume.affine[:3, 0], [1.5, 0, 0])
-    np.testing.assert_allclose(volume.affine[:3, 1], [0, 1.0, 0])
+    np.testing.assert_allclose(volume.affine[:3, 0], [-1.5, 0, 0])
+    np.testing.assert_allclose(volume.affine[:3, 1], [0, -1.0, 0])
     np.testing.assert_allclose(volume.affine[:3, 2], [0, 0, 1.0])
     np.testing.assert_allclose(volume.affine[:3, 3], [0, 0, 0])
     assert volume.metadata["spatial_geometry_verified"]

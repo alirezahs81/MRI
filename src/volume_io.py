@@ -89,8 +89,8 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
     series_uids = {str(getattr(ds, "SeriesInstanceUID", "")).strip() for _, ds in datasets}
     if len(series_uids) != 1 or "" in series_uids:
         raise ValueError(
-            "Every DICOM image must contain the same non-empty SeriesInstanceUID. "
-            "Upload one complete DICOM series at a time."
+            "This folder contains multiple DICOM series or missing/inconsistent SeriesInstanceUID metadata. "
+            "Every image must have the same non-empty SeriesInstanceUID; upload one complete series at a time."
         )
 
     # Do not combine distinct acquisitions, echoes, or temporal positions into
