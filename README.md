@@ -71,9 +71,9 @@ python main.py "D:\MRI\patient01.nii.gz" --output volume.html
 python -m pytest -q
 ```
 
-Tests use synthetic arrays and temporary NIfTI fixtures to validate software behavior. They are not clinical validation and do not establish image reconstruction accuracy on clinical scans.
+Tests include generated synthetic single-frame DICOM series, temporary NIfTI files, ZIP extraction/security cases, and headless Streamlit upload tests for both NIfTI and DICOM ZIP inputs. The DICOM fixtures are created by the test suite; they are **not real patient scans**. No end-to-end validation against the 4 GB clinical dataset or another real-world DICOM study has been performed. Passing these tests verifies software behavior on controlled fixtures only; it is not clinical validation and does not establish reconstruction accuracy on clinical scans.
 
-## Important limitations and next research stage
+## Validation status\n\n- **Automated synthetic-fixture tests:** cover NIfTI loading/rendering, conventional single-frame DICOM ordering and geometry, LPS-to-RAS affine conversion, rejection of several inconsistent/unsupported DICOM cases, ZIP safety, and Streamlit upload flows.\n- **Real-world DICOM validation:** not performed in this repository workflow. A real clinical series has not been processed end to end for this release; this remains optional follow-up validation, not a prerequisite for running the synthetic CI suite.\n- **Clinical validation:** not performed. The application is a research/educational viewer and must not be used for diagnosis or treatment decisions.\n\n## Important limitations and next research stage
 
 - Geometry compatibility is verified using shape, affine, orientation (encoded in affine), and voxel spacing. Missing affine metadata is treated as unverified.
 - Matching metadata is a necessary software check, not proof of clinical registration quality. The sample BraTS 2021 subject inspected during development had matching grids and affine metadata across FLAIR, T1, T1ce, and T2.
