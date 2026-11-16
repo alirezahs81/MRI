@@ -15,7 +15,7 @@ def _write_slice(path, *, instance, z, pixels, series_uid, orientation=None, spa
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
     meta.MediaStorageSOPClassUID = pydicom.uid.MRImageStorage
     meta.MediaStorageSOPInstanceUID = generate_uid()
-    ds = FileDataset(str(path), {}, file_meta=meta, preamble=b"\\0" * 128)
+    ds = FileDataset(str(path), {}, file_meta=meta, preamble=b"\x00" * 128)
     ds.SOPClassUID = meta.MediaStorageSOPClassUID
     ds.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
     ds.SeriesInstanceUID = series_uid
