@@ -77,11 +77,21 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
     for file_path in sorted(p for p in root.rglob("*") if p.is_file()):
         try:
             ds = pydicom.dcmread(str(file_path), force=False)
-            if hasattr(ds, "PixelData") and hasattr(ds, "Rows") and hasattr(ds, "Columns"):
-                if int(getattr(ds, "NumberOfFrames", 1)) == 1:
-                    datasets.append((file_path, ds))
-        except Exception:
+        except Exception as exc:
+            # Ignore obvious non-DICOM sidecar files, but never silently skip a
+            # file explicitly named as DICOM: that could create a partial series.
+            if file_path.suffix.lower() in {".dcm", ".dicom"}:
+                raise ValueError(f"Could not read DICOM file: {file_path.name}.") from exc
             continue
+
+        if hasattr(ds, "PixelData") and hasattr(ds, "Rows") and hasattr(ds, "Columns"):
+            frame_count = int(getattr(ds, "NumberOfFrames", 1))
+            if frame_count != 1:
+                raise ValueError(
+                    "Multi-frame DICOM is not supported. Convert to a conventional "
+                    "single-frame series before loading."
+                )
+            datasets.append((file_path, ds))
 
     if not datasets:
         raise ValueError(f"No readable single-frame DICOM images with pixel data were found in {root}.")

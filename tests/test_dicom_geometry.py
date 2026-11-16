@@ -168,3 +168,32 @@ def test_dicom_series_rejects_missing_pixel_spacing(tmp_path):
     ds.save_as(tmp_path / "b.dcm", enforce_file_format=True)
     with pytest.raises(ValueError, match="PixelSpacing"):
         load_dicom_series(tmp_path)
+
+
+
+def test_dicom_series_rejects_multiframe_images(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "single.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    _write_slice(
+        tmp_path / "multi.dcm", instance=2, z=1, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    ds = pydicom.dcmread(str(tmp_path / "multi.dcm"))
+    ds.NumberOfFrames = 2
+    ds.save_as(tmp_path / "multi.dcm", enforce_file_format=True)
+    with pytest.raises(ValueError, match="Multi-frame DICOM is not supported"):
+        load_dicom_series(tmp_path)
+
+
+def test_dicom_series_does_not_silently_skip_corrupt_dcm_file(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "valid.dcm", instance=1, z=0, pixels=np.zeros((3, 4)),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0],
+    )
+    (tmp_path / "broken.dcm").write_bytes(b"not a dicom file")
+    with pytest.raises(ValueError, match="Could not read DICOM file"):
+        load_dicom_series(tmp_path)
