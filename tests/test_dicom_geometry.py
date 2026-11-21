@@ -242,7 +242,7 @@ def test_monochrome1_pixels_are_inverted_after_rescale(tmp_path):
         series_uid=uid, orientation=[1, 0, 0, 0, 1, 0], photometric="MONOCHROME1",
     )
     volume = load_dicom_series(tmp_path)
-    np.testing.assert_allclose(volume.data[0, 0], [190.0, -10.0])
+    np.testing.assert_allclose(volume.data[0, 0], [-12.0, -212.0])
 
 
 def test_monochrome1_uses_one_intensity_range_for_entire_series(tmp_path):
@@ -256,8 +256,9 @@ def test_monochrome1_uses_one_intensity_range_for_entire_series(tmp_path):
         series_uid=uid, orientation=[1, 0, 0, 0, 1, 0], photometric="MONOCHROME1",
     )
     volume = load_dicom_series(tmp_path)
-    # Rescaled series range is [-10, 390], used consistently for both slices.
-    np.testing.assert_allclose(volume.data[:, 0, :], [[390.0, 190.0], [390.0, -10.0]])
+    # Signed 16-bit stored range is transformed by slope=2 and intercept=-10.
+    # The polarity transform is fixed by DICOM pixel metadata, not observed data.
+    np.testing.assert_allclose(volume.data[:, 0, :], [[-12.0, -212.0], [-12.0, -412.0]])
 
 
 def test_dicom_affine_preserves_regular_tilted_slice_displacement(tmp_path):
