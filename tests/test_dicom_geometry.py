@@ -10,7 +10,8 @@ from src.multimodal import check_geometry_compatibility
 from src.volume_io import load_dicom_series
 
 
-def _write_slice(path, *, instance, z, pixels, series_uid, orientation=None, spacing=(1.0, 1.5)):
+def _write_slice(path, *, instance, z, pixels, series_uid, orientation=None, spacing=(1.0, 1.5),
+                 position=None, photometric="MONOCHROME2"):
     meta = FileMetaDataset()
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
     meta.MediaStorageSOPClassUID = pydicom.uid.MRImageStorage
@@ -22,7 +23,7 @@ def _write_slice(path, *, instance, z, pixels, series_uid, orientation=None, spa
     ds.Modality = "MR"
     ds.Rows, ds.Columns = pixels.shape
     ds.SamplesPerPixel = 1
-    ds.PhotometricInterpretation = "MONOCHROME2"
+    ds.PhotometricInterpretation = photometric
     ds.BitsAllocated = 16
     ds.BitsStored = 16
     ds.HighBit = 15
@@ -34,7 +35,7 @@ def _write_slice(path, *, instance, z, pixels, series_uid, orientation=None, spa
     ds.RescaleIntercept = -10.0
     if orientation is not None:
         ds.ImageOrientationPatient = orientation
-        ds.ImagePositionPatient = [0.0, 0.0, float(z)]
+        ds.ImagePositionPatient = list(position if position is not None else [0.0, 0.0, float(z)])
     ds.PixelData = np.asarray(pixels, dtype="<i2").tobytes()
     ds.save_as(path, enforce_file_format=True)
 
@@ -231,4 +232,55 @@ def test_dicom_series_rejects_excessive_voxel_count_before_decoding(tmp_path, mo
                  series_uid=uid, orientation=[1, 0, 0, 0, 1, 0])
     monkeypatch.setattr("src.volume_io.MAX_VOLUME_VOXELS", 10)
     with pytest.raises(ValueError, match="safety limit"):
+        load_dicom_series(tmp_path)
+
+
+def test_monochrome1_pixels_are_inverted_after_rescale(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=0, pixels=np.array([[0, 100]]),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0], photometric="MONOCHROME1",
+    )
+    volume = load_dicom_series(tmp_path)
+    np.testing.assert_allclose(volume.data[0, 0], [-12.0, -212.0])
+
+
+def test_monochrome1_uses_one_intensity_range_for_entire_series(tmp_path):
+    uid = generate_uid()
+    _write_slice(
+        tmp_path / "a.dcm", instance=1, z=0, pixels=np.array([[0, 100]]),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0], photometric="MONOCHROME1",
+    )
+    _write_slice(
+        tmp_path / "b.dcm", instance=2, z=1, pixels=np.array([[0, 200]]),
+        series_uid=uid, orientation=[1, 0, 0, 0, 1, 0], photometric="MONOCHROME1",
+    )
+    volume = load_dicom_series(tmp_path)
+    # Signed 16-bit stored range is transformed by slope=2 and intercept=-10.
+    # The polarity transform is fixed by DICOM pixel metadata, not observed data.
+    np.testing.assert_allclose(volume.data[:, 0, :], [[-12.0, -212.0], [-12.0, -412.0]])
+
+
+def test_dicom_affine_preserves_regular_tilted_slice_displacement(tmp_path):
+    uid = generate_uid()
+    for index, position in enumerate(([0.0, 0.0, 0.0], [0.5, 0.0, 1.0], [1.0, 0.0, 2.0])):
+        _write_slice(
+            tmp_path / f"{index}.dcm", instance=index, z=position[2],
+            pixels=np.zeros((3, 4)), series_uid=uid,
+            orientation=[1, 0, 0, 0, 1, 0], position=position,
+        )
+    volume = load_dicom_series(tmp_path)
+    np.testing.assert_allclose(volume.affine[:3, 2], [-0.5, 0.0, 1.0])
+    assert volume.spacing_mm[0] == pytest.approx(np.sqrt(1.25))
+
+
+def test_dicom_series_rejects_irregular_in_plane_slice_displacement(tmp_path):
+    uid = generate_uid()
+    for index, position in enumerate(([0.0, 0.0, 0.0], [0.2, 0.0, 1.0], [0.9, 0.0, 2.0])):
+        _write_slice(
+            tmp_path / f"{index}.dcm", instance=index, z=position[2],
+            pixels=np.zeros((3, 4)), series_uid=uid,
+            orientation=[1, 0, 0, 0, 1, 0], position=position,
+        )
+    with pytest.raises(ValueError, match="inconsistent in-plane displacement"):
         load_dicom_series(tmp_path)

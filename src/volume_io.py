@@ -41,6 +41,10 @@ class MRIVolume:
             affine = np.asarray(self.affine, dtype=float)
             if affine.shape != (4, 4) or not np.isfinite(affine).all():
                 raise ValueError("Spatial affine must be a finite 4x4 matrix.")
+            if not np.allclose(affine[3], [0.0, 0.0, 0.0, 1.0], atol=1e-8):
+                raise ValueError("Spatial affine must have a valid homogeneous last row.")
+            if abs(float(np.linalg.det(affine[:3, :3]))) <= 1e-8:
+                raise ValueError("Spatial affine must be non-singular.")
             self.affine = affine
 
 
@@ -246,12 +250,29 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
             z_spacing = float(getattr(first, "SpacingBetweenSlices",
                                       getattr(first, "SliceThickness", 1.0)))
         datasets = [datasets[int(index)] for index in order]
-        origin = positions[int(order[0])]
+        sorted_positions = [positions[int(index)] for index in order]
+        origin = sorted_positions[0]
+        if len(sorted_positions) > 1:
+            position_steps = np.diff(np.asarray(sorted_positions), axis=0)
+            mean_step = np.mean(position_steps, axis=0)
+            if not np.isfinite(mean_step).all() or np.linalg.norm(mean_step) <= 1e-5:
+                raise ValueError("DICOM slice displacement vector is invalid.")
+            step_tolerance = max(0.01, float(np.linalg.norm(mean_step)) * 0.01)
+            if np.any(np.linalg.norm(position_steps - mean_step, axis=1) > step_tolerance):
+                raise ValueError(
+                    "DICOM slice positions have inconsistent in-plane displacement; "
+                    "a single affine 3D grid cannot represent this series safely."
+                )
+            slice_step_lps = mean_step
+            z_spacing = float(np.linalg.norm(slice_step_lps))
+        else:
+            slice_step_lps = normal * z_spacing
     else:
         datasets.sort(key=lambda item: int(getattr(item[1], "InstanceNumber", 0)))
         z_spacing = float(getattr(first, "SpacingBetweenSlices",
                                   getattr(first, "SliceThickness", 1.0)))
         origin = None
+        slice_step_lps = None
 
     if not np.isfinite(z_spacing) or z_spacing <= 0:
         raise ValueError("DICOM slice spacing must be a positive finite value.")
@@ -268,6 +289,25 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         if not np.isfinite(slope) or not np.isfinite(intercept):
             raise ValueError("DICOM rescale slope/intercept must be finite.")
         pixels = pixels * slope + intercept
+        if str(getattr(ds, "PhotometricInterpretation", "")).strip().upper() == "MONOCHROME1":
+            # Invert against the valid stored-pixel range (BitsStored and
+            # PixelRepresentation), transformed through this slice's modality
+            # rescale. Do not derive the polarity range from observed pixels:
+            # outliers or padding would otherwise alter every voxel's values.
+            stored_bits = int(ds.BitsStored)
+            if int(ds.PixelRepresentation) == 1:
+                stored_min = -(2 ** (stored_bits - 1))
+                stored_max = (2 ** (stored_bits - 1)) - 1
+            else:
+                stored_min = 0
+                stored_max = (2 ** stored_bits) - 1
+            modality_endpoints = (
+                stored_min * slope + intercept,
+                stored_max * slope + intercept,
+            )
+            modality_min = min(modality_endpoints)
+            modality_max = max(modality_endpoints)
+            pixels = (modality_min + modality_max) - pixels
         arrays.append(pixels)
 
     volume = np.stack(arrays, axis=0)
@@ -277,7 +317,7 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         affine = np.eye(4, dtype=float)
         affine[:3, 0] = column_direction * column_spacing
         affine[:3, 1] = row_direction * row_spacing
-        affine[:3, 2] = normal * z_spacing
+        affine[:3, 2] = slice_step_lps
         affine[:3, 3] = origin
         # DICOM patient coordinates are LPS; NIfTI world coordinates are RAS.
         # Convert once here so geometry comparisons across formats are meaningful.
@@ -287,7 +327,10 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
     ds0 = datasets[0][1]
     return MRIVolume(
         data=volume,
-        spacing_mm=(z_spacing, row_spacing, column_spacing),
+        spacing_mm=(
+            float(np.linalg.norm(slice_step_lps)) if slice_step_lps is not None else z_spacing,
+            row_spacing, column_spacing,
+        ),
         source=str(root),
         modality=str(getattr(ds0, "Modality", "MRI")),
         affine=affine,
@@ -301,6 +344,10 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
                 list(ds0.ImageOrientationPatient) if geometry_available else None
             ),
             "spatial_geometry_verified": geometry_available,
+            "photometric_interpretation": str(getattr(ds0, "PhotometricInterpretation", "")),
+            "slice_displacement_mm": (
+                float(np.linalg.norm(slice_step_lps)) if slice_step_lps is not None else None
+            ),
         },
     )
 
