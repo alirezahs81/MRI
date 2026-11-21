@@ -20,10 +20,11 @@ The following pull requests are merged into `main`:
 - [PR #2 — Fix DICOM grayscale polarity and tilted slice geometry](https://github.com/alirezahs81/MRI/pull/2), merge commit `f23403f45b8eb8c488cb1056334cf41e98958dba`.
 - [PR #3 — Add privacy-preserving local MRI validation report](https://github.com/alirezahs81/MRI/pull/3), merge commit `e49a0e4cf55ae2a0cb97446793c2ae6ea4407765`.
 
-The post-merge GitHub Actions run for the latest merge commit is
-[run #51](https://github.com/alirezahs81/MRI/actions/runs/44920460941).
-It completed successfully on `main` at
-`e49a0e4cf55ae2a0cb97446793c2ae6ea4407765`.
+The latest CI run recorded in this report before this documentation update is
+[run #52](https://github.com/alirezahs81/MRI/actions/runs/44922928602).
+It completed successfully on `main` at commit
+`ff7f62367120a751347ed6eeb94122a21abe948e`. This run passed before the
+license and validation-report updates in the current documentation pass.
 
 A passing CI run establishes only that the configured tests passed for the tested
 commit and environment.
