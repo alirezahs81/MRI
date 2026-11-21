@@ -1,77 +1,61 @@
-# MRI Project — Automated Validation Report
+# MRI Project — Validation Status
 
-**Report date:** 2026-11-16  
-**Repository:** [alirezahs81/MRI](https://github.com/alirezahs81/MRI)  
-**Reviewed branch:** `feat/real-mri-volume-reconstruction`  
-**Reviewed commit before this report:** `97eedda0bc08d9695472d886ff8354afa3dc3b97`
+**Report date:** 2026-11-21  
+**Repository:** [alirezahs81/MRI](https://github.com/alirezahs81/MRI)
 
-## Executive summary
+## Summary
 
-The current GitHub Actions CI runs passed on the reviewed branch head. The repository contains automated tests using generated synthetic DICOM and NIfTI data, including headless Streamlit upload tests. These results support the tested software paths only.
+The repository's automated tests use generated synthetic DICOM and NIfTI fixtures.
+They verify selected software behaviors, not performance on real patient studies.
 
-**No real clinical DICOM study or the user's approximately 4 GB dataset was processed end to end for this report. No clinical validation, diagnostic accuracy evaluation, or tumor-detection evaluation has been performed.**
+**No real clinical DICOM study or the user's local multi-gigabyte dataset has been
+processed end to end in this repository workflow. No clinical validation,
+diagnostic accuracy evaluation, or tumor-detection evaluation has been performed.**
 
-## CI evidence
+## Current repository and CI evidence
 
-The `MRI project CI` workflow completed successfully on commit `97eedda0bc08d9695472d886ff8354afa3dc3b97`:
+- PR [#2 — Fix DICOM grayscale polarity and tilted slice geometry](https://github.com/alirezahs81/MRI/pull/2) was merged into `main`.
+- The PR-head CI run [44913694899](https://github.com/alirezahs81/MRI/actions/runs/44913694899) passed on head commit `88eb222960e7b64bc4e35531abf6e51b864d7546`.
+- The squash merge commit is `f23403f45b8eb8c488cb1056334cf41e98958dba`.
+- The post-merge CI run [44918826777](https://github.com/alirezahs81/MRI/actions/runs/44918826777) completed successfully.
 
-- [Push workflow run 43902538083](https://github.com/alirezahs81/MRI/actions/runs/43902538083) — completed, success.
-- [Pull-request workflow run 43902545700](https://github.com/alirezahs81/MRI/actions/runs/43902545700) — completed, success.
+A passing CI run establishes only that the configured tests passed for the tested commit and environment.
 
-The workflow installs `requirements.txt` on Ubuntu with Python 3.11 and runs `python -m pytest -q`. The reported CI job and test step completed successfully for the commit above.
+## Automated test coverage
 
-Earlier runs for commit `55fe4bcbd283b818aaeb79bd89ef88d063fc0969` failed; the synthetic DICOM fixture preamble was corrected in commit `97eedda`, after which the two runs linked above passed. The earlier failures are retained here for traceability and are not the status of the current branch head.
+The synthetic test suite covers selected paths including:
 
-## Automated test coverage represented in the repository
+- DICOM series ordering, pixel rescale and MONOCHROME1 polarity handling.
+- DICOM orientation, spacing, slice-position consistency, and patient-space affine construction.
+- Rejection of selected unsupported or inconsistent DICOM configurations.
+- NIfTI serialization/loading, array ordering, spacing, affine and downstream slice/volume/isosurface figure construction.
+- Multi-sequence grid compatibility checks; no registration is performed.
+- Streamlit upload handling and ZIP extraction safety checks.
 
-The test suite includes the following controlled-fixture checks:
+These fixtures are generated for testing and are not a representative clinical cohort.
 
-- **NIfTI loading:** temporary NIfTI files are written and loaded; array ordering, voxel spacing, and affine handling are checked.
-- **NIfTI downstream path:** generated volumes are passed through geometry compatibility checks and slice, volume, and isosurface figure construction.
-- **DICOM series handling:** generated conventional single-frame files exercise slice ordering, rescale slope/intercept, pixel spacing, orientation, slice positions, and LPS-to-RAS affine conversion.
-- **DICOM rejection paths:** tests cover selected invalid or unsupported cases, including mixed/missing series identifiers, inconsistent orientation, missing pixel spacing, non-uniform slice positions, temporal-position inconsistency, multi-frame input, and an unreadable file explicitly named with a DICOM extension.
-- **Multi-sequence checks:** matching shape/affine/spacing and several mismatch or missing-affine cases are tested. The check does not perform registration.
-- **Streamlit upload path:** headless app tests upload generated NIfTI bytes and a ZIP containing a generated DICOM series, then exercise the application processing path.
-- **ZIP safety:** tests cover safe extraction, parent-directory traversal, Windows-style traversal, excessive entry count, and duplicate normalized paths.
+## Local real-data validation
 
-The test fixtures are generated for software testing. They are not representative clinical cohorts and do not establish performance on vendor-specific scanners, real-world acquisition variability, or patient studies.
+The repository now provides a local CLI for engineering checks on one DICOM series
+directory or one 3D NIfTI file. It writes a privacy-preserving summary of dimensions,
+spacing, affine validity, and geometry status. The report excludes source paths,
+filenames, patient identifiers, DICOM UIDs, series descriptions, origin coordinates,
+and scan data.
 
-## Implementation scope verified by code review
+The script cannot determine whether every clinically expected slice is present
+without a known reference. Compare slice order, orientation, and spacing against
+a trusted independent medical-image viewer. Keep real scans and scan-derived HTML
+local; do not upload them to a public repository.
 
-- NIfTI input is reoriented to closest canonical orientation and retains its affine.
-- DICOM input is restricted to a single conventional single-frame series with geometry checks where metadata is present.
-- DICOM patient coordinates are converted from LPS to RAS for the stored affine.
-- Multi-sequence synchronized voxel-index comparison is enabled only when array shape, affine, orientation encoded in the affine, and voxel spacing match within the configured tolerance.
-- 3D intensity rendering uses the affine when available; otherwise axes are described as relative coordinates.
-- Intensity isosurfaces are explicitly described as exploratory intensity surfaces, not segmentation.
-- ZIP extraction has bounds and path checks before extraction.
+## Scope and limitations
 
-This is a source-code review summary, not an independent clinical or regulatory assessment.
+- Conventional single-frame DICOM series are supported; enhanced multi-frame and complex multi-series studies require additional work and validation.
+- Multi-sequence compatibility is a metadata/grid check, not anatomical registration.
+- Intensity-derived isosurfaces are not tumor boundaries or anatomical segmentation.
+- The application is a research/educational viewer and is not intended for diagnosis or clinical use.
+- Real-world vendor variability, expert-reader comparison, clinical performance, and intended-workflow usability have not been validated.
 
-## Known gaps and limitations
+## PR status
 
-1. **No real-data end-to-end validation:** no real clinical DICOM series has been loaded and reviewed for this release. Synthetic tests cannot replace this.
-2. **No clinical validation:** there is no reader study, expert ground-truth comparison, diagnostic performance estimate, or clinical workflow evaluation.
-3. **No tumor model:** tumor segmentation is intentionally unavailable. The project has no validated tumor detector or tumor segmentation weights.
-4. **No image registration/resampling/fusion:** matching metadata is only a strict grid compatibility check. It does not establish anatomical registration quality.
-5. **DICOM scope:** Enhanced multi-frame DICOM, complex multi-series studies, localizer filtering, and broad vendor-specific edge cases are not validated.
-6. **Filename-dependent parsing caveat:** files that fail DICOM parsing are skipped when they do not have a `.dcm` or `.dicom` extension. A future hardening step could identify DICOM content by file signature or provide a strict mode for unknown extensions.
-7. **Dimensionality:** 4D/time-series NIfTI is not supported.
-8. **Display interpretation:** the three 2D views are array-axis planes and are not guaranteed to be anatomical axial/coronal/sagittal planes for oblique acquisitions. Intensity isosurfaces are not anatomical masks.
-
-## Suggested protocol for future real-data validation
-
-If a real dataset is made available for a future validation session, use a de-identified representative study and record:
-
-- Source format, scanner/vendor, sequence labels, dimensions, voxel spacing, orientation, and whether spatial metadata is complete.
-- Whether each DICOM archive contains exactly one intended series and whether all expected slices are loaded.
-- Slice ordering, physical orientation, affine plausibility, and spacing consistency against an independent trusted viewer or reference.
-- NIfTI/DICOM geometry comparisons only when their coordinate conventions and reference frames are known.
-- Memory use, processing time, and behavior on the intended large-volume sizes.
-- Any failures, exclusions, unsupported objects, and manual interventions.
-
-This protocol is a proposal for engineering validation, not evidence that these checks have already been completed. Clinical use would require a separate, appropriately designed validation process and expert oversight.
-
-## Release/PR status at report preparation
-
-The reviewed pull request is [PR #1](https://github.com/alirezahs81/MRI/pull/1). At the time of the source review it was open, marked as Draft, and not merged. This report does not authorize or perform a merge.
+This report reflects merged PR #2 and its CI evidence. It does not authorize or perform
+a merge of the current local-validation pull request.

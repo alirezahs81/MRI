@@ -67,6 +67,22 @@ python main.py "D:\MRI\patient01"
 python main.py "D:\MRI\patient01.nii.gz" --output volume.html
 ```
 
+## Local engineering validation (privacy-preserving)
+
+Use the local validation CLI on one DICOM series directory or one 3D NIfTI file.
+It keeps the scan on your computer and writes a summary without source paths,
+patient identifiers, DICOM UIDs, series descriptions, origin coordinates, or image data.
+
+```powershell
+python scripts/validate_mri.py "D:\MRI\deidentified_series" --output "D:\MRI\validation_report.md"
+python scripts/validate_mri.py "D:\MRI\scan.nii.gz" --format json --output "D:\MRI\validation_report.json"
+```
+
+Compare slice order, orientation, and spacing with a trusted independent viewer.
+The script cannot confirm expected slice completeness without a reference.
+See [the Windows guide](docs/local_mri_validation.md). This is not diagnosis or
+clinical validation; do not publish scan-derived images or HTML.
+
 ## Run tests
 
 ```powershell
