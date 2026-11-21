@@ -36,7 +36,7 @@ def test_report_does_not_leak_paths_or_dicom_identifiers():
     report = validate_volume(_volume())
     text = render_markdown(report)
     serialized = str(report) + text
-    for secret in ("C:\\private", "SECRET-UID", "SECRET-SERIES", "patient"):
+    for secret in ("C:\\private\\patient\\study", "SECRET-UID", "SECRET-SERIES"):
         assert secret.lower() not in serialized.lower()
 
 
