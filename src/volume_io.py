@@ -289,14 +289,15 @@ def load_dicom_series(directory: str | Path) -> MRIVolume:
         if not np.isfinite(slope) or not np.isfinite(intercept):
             raise ValueError("DICOM rescale slope/intercept must be finite.")
         pixels = pixels * slope + intercept
-        if str(getattr(ds, "PhotometricInterpretation", "")).strip().upper() == "MONOCHROME1":
-            # Normalize polarity to MONOCHROME2 for consistent grayscale display.
-            pixel_min = float(np.min(pixels))
-            pixel_max = float(np.max(pixels))
-            pixels = (pixel_min + pixel_max) - pixels
         arrays.append(pixels)
 
     volume = np.stack(arrays, axis=0)
+    if str(getattr(datasets[0][1], "PhotometricInterpretation", "")).strip().upper() == "MONOCHROME1":
+        # Use one intensity range for the whole series so slice-to-slice
+        # polarity normalization does not introduce artificial intensity jumps.
+        pixel_min = float(np.min(volume))
+        pixel_max = float(np.max(volume))
+        volume = (pixel_min + pixel_max) - volume
     row_spacing, column_spacing = float(first_spacing[0]), float(first_spacing[1])
     affine = None
     if geometry_available and len(datasets) > 0:
